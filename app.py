@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, request
+from flask import render_template
 from qdrant_client import QdrantClient
 from qdrant_client.models import VectorParams, Distance
 from dataclasses import dataclass
@@ -16,6 +17,7 @@ from google import genai
 
 
 
+
 app = Flask(__name__)
 
 qdrant_client = QdrantClient(
@@ -25,7 +27,8 @@ qdrant_client = QdrantClient(
 
 @app.route("/")
 def home():
-    return "Home works"
+    return render_template("index.html")
+
 
 @app.route("/test", methods=["POST"])
 def test():

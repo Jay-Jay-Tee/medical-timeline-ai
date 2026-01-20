@@ -135,9 +135,29 @@ def create_medical_event(content, patient_id, event_type, timestamp=None):
         content=content
     )
 
+@app.route("/ingest", methods=["POST"])
+def ingest():
+    data = request.json
 
+    # sanitize inputs
+    patient_name = data.get("patient_name")
+    doctor_name = data.get("doctor_name")
 
-def store_event_in_qdrant(event: MedicalEvent, vector: list[float]):
+    if not isinstance(patient_name, str) or not patient_name.strip():
+        patient_name = "Unknown"
+
+    if not isinstance(doctor_name, str) or not doctor_name.strip():
+        doctor_name = "Self"
+
+    event = create_medical_event(
+        content=data["content"],
+        patient_id=data["patient_id"],
+        event_type=data["event_type"],
+        timestamp=data.get("timestamp")
+    )
+
+    vector = list(embedding_model.embed(event.content))[0].tolist()
+
     qdrant_client.upsert(
         collection_name=COLLECTION_NAME,
         points=[
@@ -146,49 +166,16 @@ def store_event_in_qdrant(event: MedicalEvent, vector: list[float]):
                 vector=vector,
                 payload={
                     "patient_id": event.patient_id,
-                    "patient_name": data.get("patient_name", "Unknown"),
-                    "doctor_name": data.get("doctor_name", "Self"),
+                    "patient_name": patient_name,
+                    "doctor_name": doctor_name,
                     "timestamp": event.timestamp,
                     "event_type": event.event_type,
-                    "modality": event.modality,
+                    "modality": "text",
                     "content": event.content
                 }
             )
         ]
     )
-
-@app.route("/ingest", methods=["POST"])
-def ingest():
-    data = request.json
-
-    event = create_medical_event(
-    content=data["content"],
-    patient_id=data["patient_id"],
-    event_type=data["event_type"],
-    timestamp=data.get("timestamp") 
-)
-    
-    vector = list(embedding_model.embed(event.content))[0].tolist()
-
-    qdrant_client.upsert(
-    collection_name=COLLECTION_NAME,
-    points=[
-        PointStruct(
-            id=event.event_id,
-            vector=vector,
-            payload={
-                "patient_id": event.patient_id,
-                "patient_name": data.get("patient_name", "Unknown"),
-                "doctor_name": data.get("doctor_name", "Self"),
-                "timestamp": event.timestamp,
-                "event_type": event.event_type,
-                "modality": "text",
-                "content": event.content
-            }
-        )
-    ]
-)
-
 
     return jsonify({
         "status": "stored",

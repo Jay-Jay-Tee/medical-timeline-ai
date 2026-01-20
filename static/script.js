@@ -58,6 +58,15 @@ async function ingestEvent() {
   const eventType = document.getElementById("eventType").value.trim();
   const content = document.getElementById("content").value.trim();
   const timestampInput = document.getElementById("eventTime").value;
+  const safePatientName =
+  patientName && patientName.length > 0
+    ? patientName
+    : "Unknown";
+
+const safeDoctorName =
+  doctorName && doctorName.length > 0
+    ? doctorName
+    : "Self";
 
   if (!patientId || !eventType || !content) {
     alert("Please fill all required fields");
@@ -76,8 +85,8 @@ async function ingestEvent() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         patient_id: patientId,
-        patient_name: patientName || "Unknown",
-        doctor_name: doctorName || "Self",
+        patient_name: safePatientName,
+        doctor_name: safeDoctorName,
         event_type: eventType,
         content: content,
         timestamp: timestamp

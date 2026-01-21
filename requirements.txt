@@ -1,3 +1,7 @@
+# ===========================================
+# MEDICAL TIMELINE AI - PYTHON DEPENDENCIES
+# ===========================================
+
 # Core Flask Framework
 flask
 flask-cors
@@ -7,10 +11,10 @@ werkzeug
 # Vector Database Client
 qdrant-client
 
-# Embeddings Model
+# Text Embeddings (Fast, CPU-only)
 fastembed
 
-# AI Provider - Groq (PRIMARY)
+# AI Provider - Groq (Fast inference)
 groq
 
 # Data Processing
@@ -31,13 +35,62 @@ reportlab
 # Image Processing
 pillow
 
-# Password Hashing
+# Password Hashing (Secure)
 bcrypt
 
 # WSGI Server for Production
 gunicorn
 
-# Additional utilities
+# Additional Utilities
 certifi
 charset-normalizer
 urllib3
+idna
+
+# ===========================================
+# OPTIONAL DEPENDENCIES
+# ===========================================
+
+# For better performance in production
+# gevent==23.9.1
+
+# For monitoring and logging
+# python-json-logger==2.0.7
+
+# ===========================================
+# INSTALLATION INSTRUCTIONS
+# ===========================================
+#
+# 1. Create virtual environment:
+#    python -m venv venv
+#    source venv/bin/activate  (Linux/Mac)
+#    venv\Scripts\activate     (Windows)
+#
+# 2. Install dependencies:
+#    pip install -r requirements.txt
+#
+# 3. Verify installation:
+#    pip list
+#
+# ===========================================
+# PYTHON VERSION COMPATIBILITY
+# ===========================================
+#
+# Supported: Python 3.8, 3.9, 3.10, 3.11, 3.12, 3.13
+# Recommended: Python 3.11 (best performance)
+#
+# Check your version:
+#    python --version
+#
+# ===========================================
+# TROUBLESHOOTING
+# ===========================================
+#
+# If installation fails:
+# 1. Update pip: pip install --upgrade pip
+# 2. Install build tools: pip install setuptools wheel
+# 3. On Windows, install Visual C++ Build Tools
+# 4. On Linux, install: python3-dev build-essential
+# 5. See TROUBLESHOOTING.md for more help
+#
+# ===========================================

@@ -17,55 +17,89 @@
       .no-print { display: none !important; }
       body { background: white !important; }
     }
+
+    .gradient-text {
+      background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
   </style>
 </head>
 
-<body class="bg-gray-50 min-h-screen py-8 px-4">
-  <div class="max-w-4xl mx-auto">
+<body class="bg-gradient-to-br from-gray-50 to-blue-50 min-h-screen py-8 px-4">
+  <div class="max-w-5xl mx-auto">
     <!-- Header -->
-    <div class="bg-white shadow-lg rounded-2xl p-8 mb-6">
-      <div class="flex justify-between items-start">
+    <div class="bg-white shadow-xl rounded-2xl p-8 mb-6">
+      <div class="flex justify-between items-start flex-wrap gap-4">
         <div>
-          <h1 class="text-3xl font-bold text-blue-600 mb-2">Medical Timeline</h1>
-          <p class="text-gray-600">Patient ID: <span id="patientIdDisplay" class="font-mono font-bold"></span></p>
-          <p class="text-sm text-gray-500 mt-1">Read-only view • Share this link with healthcare providers</p>
+          <h1 class="text-4xl font-bold gradient-text mb-3">📋 Medical Timeline</h1>
+          <div class="space-y-2">
+            <p class="text-gray-700">
+              <span class="font-semibold">Patient ID:</span> 
+              <span id="patientIdDisplay" class="font-mono font-bold text-blue-600"></span>
+            </p>
+            <p id="hospitalDisplay" class="text-gray-600 hidden">
+              <span class="font-semibold">Hospital:</span> 
+              <span id="hospitalName" class="font-medium"></span>
+            </p>
+            <p class="text-sm text-gray-500 mt-2">
+              🔒 Read-only view • Share this link with healthcare providers
+            </p>
+          </div>
         </div>
-        <button onclick="window.print()" class="no-print px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
-          🖨️ Print
+        <button onclick="window.print()" 
+                class="no-print px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:shadow-lg transition-all font-semibold">
+          🖨️ Print Timeline
         </button>
       </div>
     </div>
 
     <!-- Loading State -->
-    <div id="loading" class="bg-white shadow-lg rounded-2xl p-8 text-center">
-      <div class="animate-pulse">
-        <div class="h-4 bg-gray-200 rounded w-3/4 mx-auto mb-4"></div>
-        <div class="h-4 bg-gray-200 rounded w-1/2 mx-auto"></div>
+    <div id="loading" class="bg-white shadow-xl rounded-2xl p-12 text-center">
+      <div class="animate-pulse space-y-4">
+        <div class="h-6 bg-gray-200 rounded w-3/4 mx-auto"></div>
+        <div class="h-6 bg-gray-200 rounded w-1/2 mx-auto"></div>
+        <div class="h-6 bg-gray-200 rounded w-2/3 mx-auto"></div>
       </div>
-      <p class="text-gray-600 mt-4">Loading timeline...</p>
+      <p class="text-gray-600 mt-6 font-medium">Loading medical timeline...</p>
     </div>
 
     <!-- Timeline Display -->
     <div id="timeline" class="hidden space-y-6">
       <!-- Data Quality Card -->
-      <div class="bg-white shadow-lg rounded-2xl p-6">
-        <h2 class="text-xl font-bold mb-3">📊 Data Quality Assessment</h2>
-        <div id="qualityInfo" class="p-4 rounded-lg bg-gray-50">
+      <div class="bg-white shadow-xl rounded-2xl p-6">
+        <h2 class="text-2xl font-bold mb-4 flex items-center gap-2">
+          <span>📊</span> Data Quality Assessment
+        </h2>
+        <div id="qualityInfo" class="p-5 rounded-xl bg-gray-50">
           <!-- Filled by JS -->
         </div>
       </div>
 
       <!-- AI Summary Card -->
-      <div class="bg-white shadow-lg rounded-2xl p-6">
-        <h2 class="text-xl font-bold mb-3">🤖 AI-Generated Summary</h2>
-        <div id="aiSummary" class="p-4 rounded-lg bg-blue-50 text-gray-800">
+      <div class="bg-gradient-to-br from-blue-50 to-indigo-50 shadow-xl rounded-2xl p-6">
+        <h2 class="text-2xl font-bold mb-4 flex items-center gap-2">
+          <span>🤖</span> AI-Generated Summary
+        </h2>
+        <div id="aiSummary" class="p-5 rounded-xl bg-white text-gray-800 shadow-inner">
           <!-- Filled by JS -->
         </div>
       </div>
 
       <!-- Timeline Table -->
-      <div class="bg-white shadow-lg rounded-2xl p-6">
-        <h2 class="text-xl font-bold mb-4">📅 Complete Timeline</h2>
+      <div class="bg-white shadow-xl rounded-2xl p-6">
+        <h2 class="text-2xl font-bold mb-5 flex items-center gap-2">
+          <span>📅</span> Complete Medical Timeline
+        </h2>
         <div id="timelineTable" class="overflow-x-auto">
           <!-- Filled by JS -->
         </div>
@@ -73,17 +107,24 @@
     </div>
 
     <!-- Error State -->
-    <div id="error" class="hidden bg-red-50 border-2 border-red-200 rounded-2xl p-8 text-center">
-      <div class="text-6xl mb-4">⚠️</div>
-      <p class="text-red-600 font-semibold text-lg" id="errorMessage"></p>
-      <p class="text-sm text-red-500 mt-2">Please check the Patient ID and try again</p>
+    <div id="error" class="hidden bg-red-50 border-4 border-red-200 rounded-2xl p-12 text-center shadow-xl">
+      <div class="text-7xl mb-4">⚠️</div>
+      <p class="text-red-600 font-bold text-2xl mb-3" id="errorMessage"></p>
+      <p class="text-red-500 text-lg">Please check the Patient ID and try again</p>
+      <button onclick="location.reload()" 
+              class="mt-6 px-6 py-3 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-all font-semibold">
+        🔄 Retry
+      </button>
     </div>
 
     <!-- Footer -->
-    <div class="text-center mt-8 text-sm text-gray-500">
-      <p>🩺 Generated by Medical Timeline AI</p>
-      <p class="mt-1">Secure Medical Timeline System • Read-Only Access</p>
-      <p class="mt-3 text-xs">This is a read-only view. Contact the patient for edit access.</p>
+    <div class="text-center mt-8 text-sm text-gray-600 space-y-2">
+      <p class="font-semibold">🩺 Medical Timeline AI</p>
+      <p>Secure Medical Timeline System • Read-Only Access</p>
+      <p class="text-xs text-gray-500 mt-4">
+        This is a read-only view for healthcare providers.<br>
+        Contact the patient for edit access or to add new records.
+      </p>
     </div>
   </div>
 
@@ -104,7 +145,7 @@
         // Check if response is JSON
         const contentType = res.headers.get("content-type");
         if (!contentType || !contentType.includes("application/json")) {
-          throw new Error("Server error. Please try again later.");
+          throw new Error("Server error. The patient ID may not exist or the server is experiencing issues.");
         }
 
         const data = await res.json();
@@ -118,6 +159,12 @@
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('timeline').classList.remove('hidden');
 
+        // Show hospital if available
+        if (data.timeline.length > 0 && data.timeline[0].hospital_name) {
+          document.getElementById('hospitalDisplay').classList.remove('hidden');
+          document.getElementById('hospitalName').textContent = data.timeline[0].hospital_name;
+        }
+
         // Fill quality info
         const quality = data.data_quality;
         const qualityColor = 
@@ -126,40 +173,45 @@
           'bg-red-100 text-red-800 border-red-300';
 
         document.getElementById('qualityInfo').innerHTML = `
-          <div class="flex items-center gap-3 mb-3">
-            <span class="px-4 py-2 rounded-full ${qualityColor} font-bold border-2">
+          <div class="flex items-center gap-4 mb-4 flex-wrap">
+            <span class="px-6 py-2 rounded-full ${qualityColor} font-bold border-2 text-lg">
               ${quality.label}
             </span>
             <span class="text-gray-700 font-medium">${quality.description}</span>
           </div>
-          <div class="grid grid-cols-2 gap-4 mt-4 text-sm">
-            <div class="bg-white p-3 rounded border">
-              <div class="text-gray-500">Total Events</div>
-              <div class="text-2xl font-bold text-blue-600">${data.timeline.length}</div>
+          <div class="grid md:grid-cols-2 gap-4 mt-5">
+            <div class="bg-white p-4 rounded-xl border-2 border-gray-200 shadow-sm">
+              <div class="text-gray-600 text-sm font-medium">Total Events</div>
+              <div class="text-4xl font-bold text-blue-600 mt-2">${data.timeline.length}</div>
             </div>
-            <div class="bg-white p-3 rounded border">
-              <div class="text-gray-500">Semantic Shift</div>
-              <div class="text-2xl font-bold text-purple-600">${data.semantic_shift}</div>
+            <div class="bg-white p-4 rounded-xl border-2 border-gray-200 shadow-sm">
+              <div class="text-gray-600 text-sm font-medium">Health Change Index</div>
+              <div class="text-4xl font-bold text-purple-600 mt-2">${data.semantic_shift}</div>
             </div>
           </div>
         `;
 
         // Fill AI summary
         document.getElementById('aiSummary').innerHTML = `
-          <p class="leading-relaxed">${escapeHtml(data.overall_summary)}</p>
+          <p class="leading-relaxed text-lg">${escapeHtml(data.overall_summary)}</p>
+          <p class="text-xs text-gray-500 mt-4 italic">
+            Generated by AI • For informational purposes only
+          </p>
         `;
 
         // Build timeline table
         let tableHTML = `
-          <table class="min-w-full border rounded-lg text-sm">
-            <thead class="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+          <table class="min-w-full border-2 border-gray-200 rounded-xl text-sm overflow-hidden">
+            <thead class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
               <tr>
-                <th class="border border-blue-400 px-4 py-3 text-left font-semibold">Date & Time</th>
-                <th class="border border-blue-400 px-4 py-3 text-left font-semibold">Event Type</th>
-                <th class="border border-blue-400 px-4 py-3 text-left font-semibold">Details</th>
+                <th class="border border-blue-500 px-5 py-4 text-left font-bold">Date & Time</th>
+                <th class="border border-blue-500 px-5 py-4 text-left font-bold">Doctor</th>
+                <th class="border border-blue-500 px-5 py-4 text-left font-bold">Hospital</th>
+                <th class="border border-blue-500 px-5 py-4 text-left font-bold">Event Type</th>
+                <th class="border border-blue-500 px-5 py-4 text-left font-bold">Details</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody class="bg-white">
         `;
 
         for (const event of data.timeline) {
@@ -173,13 +225,15 @@
 
           tableHTML += `
             <tr class="hover:bg-blue-50 transition-colors">
-              <td class="border px-4 py-3 text-gray-600 font-medium">${escapeHtml(date)}</td>
-              <td class="border px-4 py-3">
-                <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-semibold">
+              <td class="border border-gray-200 px-5 py-4 text-gray-700 font-semibold whitespace-nowrap">${escapeHtml(date)}</td>
+              <td class="border border-gray-200 px-5 py-4 text-gray-700">${escapeHtml(event.doctor_name)}</td>
+              <td class="border border-gray-200 px-5 py-4 text-gray-700">${escapeHtml(event.hospital_name)}</td>
+              <td class="border border-gray-200 px-5 py-4">
+                <span class="px-4 py-1.5 bg-blue-100 text-blue-800 rounded-full text-xs font-bold inline-block">
                   ${escapeHtml(event.event_type)}
                 </span>
               </td>
-              <td class="border px-4 py-3 text-gray-800">${escapeHtml(event.content)}</td>
+              <td class="border border-gray-200 px-5 py-4 text-gray-800">${escapeHtml(event.content)}</td>
             </tr>
           `;
         }

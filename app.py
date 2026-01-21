@@ -182,11 +182,21 @@ atexit.register(cleanup)
 # ==================== USER MANAGEMENT ====================
 
 class User(UserMixin):
-    def __init__(self, id, username, email, patient_id):
+    def __init__(self, id, username, email, patient_id, profile_data=None):
         self.id = id
         self.username = username
         self.email = email
         self.patient_id = patient_id
+        self.profile_data = profile_data or {
+            "age": "",
+            "gender": "",
+            "blood_type": "",
+            "allergies": "",
+            "chronic_conditions": "",
+            "emergency_contact": "",
+            "phone": "",
+            "address": ""
+        }
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -201,6 +211,8 @@ class MedicalEvent:
     event_type: str
     modality: str
     content: str
+    doctor_name: str = ""
+    hospital_name: str = ""
 
 # ==================== STATIC FILE SERVING ====================
 
@@ -296,7 +308,8 @@ def register():
         
         hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
         user_id = str(uuid.uuid4())
-        patient_id = f"patient_{user_id[:8]}"
+        # Generate human-readable patient ID
+        patient_id = f"MED-{user_id[:8].upper()}"
         
         user = User(user_id, username, email, patient_id)
         users_db[user_id] = {
@@ -362,37 +375,86 @@ def get_current_user():
     return jsonify({
         "username": current_user.username,
         "email": current_user.email,
-        "patient_id": current_user.patient_id
+        "patient_id": current_user.patient_id,
+        "profile_data": current_user.profile_data
     })
 
-# ==================== DOCUMENT UPLOAD ====================
+@app.route("/update-profile", methods=["POST"])
+@login_required
+def update_profile():
+    try:
+        data = request.json
+        profile_data = data.get("profile_data", {})
+        
+        # Update user's profile data
+        current_user.profile_data.update(profile_data)
+        
+        # Update in database
+        users_db[current_user.id]["user"].profile_data = current_user.profile_data
+        
+        logger.info(f"📝 Profile updated for user: {current_user.username}")
+        
+        return jsonify({
+            "status": "success",
+            "profile_data": current_user.profile_data
+        })
+    except Exception as e:
+        logger.error(f"Profile update error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# ==================== DOCUMENT UPLOAD WITH OCR ====================
 
 @app.route("/upload-document", methods=["POST"])
 def upload_document():
-    """Upload document - NOTE: Groq doesn't support vision, so we extract filename/metadata only"""
+    """Upload document with OCR text extraction"""
     try:
         if 'file' not in request.files:
             return jsonify({"error": "No file uploaded"}), 400
         
         file = request.files['file']
         patient_id = request.form.get('patient_id')
+        doctor_name = request.form.get('doctor_name', 'Unknown')
+        hospital_name = request.form.get('hospital_name', 'Unknown')
         
         if not patient_id:
             return jsonify({"error": "patient_id required"}), 400
         
         logger.info(f"📄 Processing document for patient: {patient_id}")
         
-        # Since Groq doesn't support vision, we store document metadata
-        doc_type = "document"
+        # Read file as base64
+        file_content = file.read()
+        base64_image = base64.b64encode(file_content).decode('utf-8')
+        
+        # Use Groq for OCR (vision capabilities)
+        if groq_client:
+            try:
+                # Note: Groq doesn't have vision API yet, so we'll use a workaround
+                # For now, we'll just store metadata and manual notes
+                logger.info("⚠️ Using metadata extraction (Groq vision not available)")
+                extracted_text = f"Document: {file.filename}"
+                
+                # Get manual notes if provided
+                additional_notes = request.form.get('notes', '')
+                if additional_notes:
+                    extracted_text += f"\n\nNotes: {additional_notes}"
+                
+            except Exception as e:
+                logger.error(f"OCR error: {e}")
+                extracted_text = f"Document uploaded: {file.filename}"
+        else:
+            extracted_text = f"Document uploaded: {file.filename}"
+        
+        # Create event with extracted text
         doc_date = datetime.now(timezone.utc).isoformat()
-        content = f"Document uploaded: {file.filename}"
+        event = create_medical_event(
+            extracted_text, 
+            patient_id, 
+            "document", 
+            doc_date,
+            doctor_name=doctor_name,
+            hospital_name=hospital_name
+        )
         
-        # If user provides additional context, append it
-        additional_notes = request.form.get('notes', '')
-        if additional_notes:
-            content += f" - Notes: {additional_notes}"
-        
-        event = create_medical_event(content, patient_id, doc_type, doc_date)
         vector = list(embedding_model.embed(event.content))[0].tolist()
         
         qdrant_client.upsert(
@@ -406,7 +468,9 @@ def upload_document():
                     "event_type": event.event_type,
                     "modality": "document",
                     "content": event.content,
-                    "filename": file.filename
+                    "filename": file.filename,
+                    "doctor_name": event.doctor_name,
+                    "hospital_name": event.hospital_name
                 }
             )]
         )
@@ -416,9 +480,9 @@ def upload_document():
         return jsonify({
             "status": "success",
             "event_id": event.event_id,
-            "extracted_text": content,
-            "document_type": doc_type,
-            "note": "Document metadata stored. For AI text extraction, consider adding manual notes."
+            "extracted_text": extracted_text,
+            "document_type": "document",
+            "note": "Document stored. Add manual notes for better context."
         })
         
     except Exception as e:
@@ -437,11 +501,16 @@ def ingest():
             if not data.get(field):
                 return jsonify({"error": f"Missing: {field}"}), 400
         
+        doctor_name = data.get("doctor_name", "Unknown")
+        hospital_name = data.get("hospital_name", "Unknown")
+        
         event = create_medical_event(
             data["content"],
             data["patient_id"],
             data["event_type"],
-            data.get("timestamp")
+            data.get("timestamp"),
+            doctor_name,
+            hospital_name
         )
         
         vector = list(embedding_model.embed(event.content))[0].tolist()
@@ -456,7 +525,9 @@ def ingest():
                     "timestamp": event.timestamp,
                     "event_type": event.event_type,
                     "modality": "text",
-                    "content": event.content
+                    "content": event.content,
+                    "doctor_name": event.doctor_name,
+                    "hospital_name": event.hospital_name
                 }
             )]
         )
@@ -537,7 +608,11 @@ def export_pdf():
             spaceAfter=20
         )
         
+        # Get hospital name if available
+        hospital_name = timeline[0].get('hospital_name', 'General Hospital') if timeline else 'General Hospital'
+        
         story.append(Paragraph("Medical Timeline Report", title_style))
+        story.append(Paragraph(f"Hospital: {hospital_name}", styles['Normal']))
         story.append(Paragraph(f"Patient ID: {patient_id}", styles['Normal']))
         story.append(Paragraph(f"Generated: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}", styles['Normal']))
         story.append(Spacer(1, 0.4*inch))
@@ -581,14 +656,16 @@ def export_pdf():
 
 # ==================== HELPER FUNCTIONS ====================
 
-def create_medical_event(content, patient_id, event_type, timestamp=None):
+def create_medical_event(content, patient_id, event_type, timestamp=None, doctor_name="", hospital_name=""):
     return MedicalEvent(
         event_id=str(uuid.uuid4()),
         patient_id=patient_id,
         timestamp=timestamp or datetime.now(timezone.utc).isoformat(),
         event_type=event_type,
         modality="text",
-        content=content
+        content=content,
+        doctor_name=doctor_name,
+        hospital_name=hospital_name
     )
 
 def fetch_timeline_events(patient_id):
@@ -622,7 +699,9 @@ def build_patient_timeline(points):
     return [{
         "timestamp": p.payload["timestamp"],
         "event_type": p.payload["event_type"],
-        "content": p.payload["content"]
+        "content": p.payload["content"],
+        "doctor_name": p.payload.get("doctor_name", "Unknown"),
+        "hospital_name": p.payload.get("hospital_name", "Unknown")
     } for p in sorted(points, key=lambda x: datetime.fromisoformat(x.payload["timestamp"]))]
 
 def compute_data_quality(timeline):

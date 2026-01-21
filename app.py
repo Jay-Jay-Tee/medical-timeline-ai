@@ -44,45 +44,43 @@ VECTOR_DIM = 384
 @app.route("/timeline-summary", methods=["POST"])
 def timeline_summary():
     data = request.json
+    patient_id = data["patient_id"]
 
-    points = search_events(
-        query_text=data["query"],
-        patient_id=data["patient_id"],
-        limit=10
+    points = fetch_timeline_events(patient_id)
+
+    if len(points) < 2:
+        return jsonify({"error": "Not enough events for timeline summary"})
+
+    # Build record-wise timeline
+    timeline = []
+    for p in points:
+        timeline.append({
+            "timestamp": p.payload["timestamp"],
+            "event_type": p.payload["event_type"],
+            "content": p.payload["content"]
+        })
+
+    # Overall semantic comparison (first vs last)
+    earliest = fetch_point_with_vector(points[0].id)
+    latest = fetch_point_with_vector(points[-1].id)
+
+    semantic_shift = cosine_distance(
+        earliest.vector,
+        latest.vector
     )
-
-    if len(points) == 0:
-        return jsonify({"error": "No events found"})
 
     timeline = build_patient_timeline(points)
 
-    prompt = f"""
-You are a medical record summarization assistant.
-
-Rules:
-- Do NOT diagnose
-- Do NOT suggest treatment
-- Only summarize what is explicitly stated
-- Mention progression or stability if present
-- Reference time order
-
-Patient timeline:
-"""
-
-    for event in timeline:
-        prompt += f"""
-[{event['timestamp']}] ({event['event_type']}):
-{event['content']}
-"""
-
-    prompt += "\nWrite a concise summary of how the patient's condition evolved."
-
+    prompt = build_overview_prompt(timeline)
     explanation = ai_explain(prompt)
+
 
     return jsonify({
         "timeline": timeline,
-        "summary": explanation
+        "semantic_shift": round(float(semantic_shift), 3),
+        "overall_summary": explanation
     })
+
 
 """@app.route("/setup-collection")
 def setup_collection():
@@ -120,7 +118,7 @@ class MedicalEvent:
     timestamp: str
     event_type: str
     modality: str
-    content: str
+    content: str 
 
 def create_medical_event(content, patient_id, event_type, timestamp=None):
     if timestamp is None:
@@ -305,6 +303,27 @@ def compute_difference(points):
         "metadata_changes": metadata_changes
     }
 
+def fetch_timeline_events(patient_id: str):
+    results = qdrant_client.scroll(
+        collection_name="medical_events",
+        scroll_filter=Filter(
+            must=[
+                FieldCondition(
+                    key="patient_id",
+                    match=MatchValue(value=patient_id)
+                )
+            ]
+        ),
+        limit=100,
+        with_payload=True
+    )
+
+    points = results[0]
+    return sorted(
+        points,
+        key=lambda p: datetime.fromisoformat(p.payload["timestamp"])
+    )
+
 @app.route("/difference", methods=["POST"])
 def difference():
     data = request.json
@@ -351,6 +370,8 @@ Later record:
 \"\"\"
 
 Now write a short, neutral explanation of how the content changed over time.
+If no clear differences are explicitly stated, say:
+"The records show limited explicit textual differences over time."
 """
 
 def ai_explain(prompt: str):
@@ -359,7 +380,45 @@ def ai_explain(prompt: str):
         model="gemini-3-flash-preview",
         contents=prompt
     )
-    return response.text
+
+    text = getattr(response, "text", None)
+
+    if not text or not text.strip():
+        return "The records show limited explicit textual differences over time."
+
+    return text
+
+def build_overview_prompt(timeline):
+    timeline_text = "\n".join([
+        f"- {e['timestamp']}: {e['event_type']} → {e['content']}"
+        for e in timeline
+    ])
+
+    return f"""
+You are a medical timeline summarization assistant.
+
+Your task is to give an overall overview of a patient's medical records.
+
+Strict rules:
+- Do NOT diagnose any disease.
+- Do NOT guess disease names.
+- Do NOT suggest treatment.
+- Do NOT infer causes.
+- Only describe observable patterns over time.
+
+Focus on:
+- Frequency of visits or records
+- Changes in monitoring or follow-ups
+- Whether records suggest stability, escalation, or continuity
+- Gaps or clustering in time
+
+Timeline:
+{timeline_text}
+
+Write a concise, neutral overview of the patient's medical history.
+If records are vague, say so explicitly.
+"""
+
 
 
 @app.route("/explain", methods=["POST"])

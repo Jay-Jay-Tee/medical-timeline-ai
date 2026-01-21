@@ -1,5 +1,10 @@
 let ingestInProgress = false;
+let summaryInProgress = false;
 let analysisInProgress = false;
+
+/* =========================
+   TIME HELPERS
+========================= */
 
 function localToUTC(datetimeLocalValue) {
   if (!datetimeLocalValue) return null;
@@ -11,43 +16,119 @@ function utcToLocal(isoString) {
   return new Date(isoString).toLocaleString();
 }
 
+/* =========================
+   TIMELINE SUMMARY
+========================= */
+
 async function runTimelineSummary(btn) {
+  if (summaryInProgress || analysisInProgress) return;
+
+  summaryInProgress = true;
+
+  const analyzeBtn = document.querySelector(
+    'button[onclick="runAnalysis()"]'
+  );
+
   btn.disabled = true;
   btn.innerText = "⏳ Summarizing...";
+  if (analyzeBtn) analyzeBtn.disabled = true;
 
-  const patientId = document.getElementById("ingestPatientId").value.trim();
-  const patientName = document.getElementById("patientName").value.trim();
-  const doctorName = document.getElementById("doctorName").value.trim();
-  const eventType = document.getElementById("eventType").value;
-  const content = document.getElementById("content").value.trim();
+  const ingestId = document.getElementById("ingestPatientId").value.trim();
+  const analysisId = document.getElementById("patientId").value.trim();
+  const patientId = ingestId || analysisId;
 
+  const output = document.getElementById("output");
+
+  function cleanup() {
+    summaryInProgress = false;
+    btn.disabled = false;
+    btn.innerText = "Summarize Full Timeline";
+    if (analyzeBtn) analyzeBtn.disabled = false;
+  }
+
+  if (!patientId) {
+    output.innerText = "❌ Please enter Patient ID (Ingest or Analyze section)";
+    cleanup();
+    return;
+  }
 
   try {
     const res = await fetch("/timeline-summary", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ patient_id: patientId, query })
+      body: JSON.stringify({ patient_id: patientId })
     });
 
     const data = await res.json();
 
     if (data.error) {
       output.innerText = "❌ " + data.error;
-    } else {
-      output.innerText =
-        "🧾 Patient Timeline Summary\n\n" +
-        data.summary;
+      cleanup();
+      return;
     }
+
+    /* ---------- Build Table ---------- */
+    let tableHTML = `
+      <div class="overflow-x-auto">
+        <table class="min-w-full border border-gray-300 text-sm">
+          <thead class="bg-gray-100">
+            <tr>
+              <th class="border px-3 py-2 text-left">Time (Local)</th>
+              <th class="border px-3 py-2 text-left">Event Type</th>
+              <th class="border px-3 py-2 text-left">Content</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+
+    for (const row of data.timeline) {
+      tableHTML += `
+        <tr class="hover:bg-gray-50">
+          <td class="border px-3 py-2">${utcToLocal(row.timestamp)}</td>
+          <td class="border px-3 py-2">${row.event_type}</td>
+          <td class="border px-3 py-2">${row.content}</td>
+        </tr>
+      `;
+    }
+
+    tableHTML += `
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    const summaryText =
+      data.overall_summary && data.overall_summary.trim().length > 0
+        ? data.overall_summary
+        : "The records show limited explicit textual differences over time.";
+
+    output.innerHTML = `
+      <h3 class="font-semibold mb-2">🗂 Patient Timeline</h3>
+      ${tableHTML}
+
+      <hr class="my-4">
+
+      <h3 class="font-semibold mb-1">🧠 AI Patient Overview</h3>
+      <p class="mb-2">${summaryText}</p>
+
+      <p class="text-sm text-gray-600">
+        Semantic Shift: <strong>${data.semantic_shift}</strong>
+      </p>
+    `;
+
   } catch {
     output.innerText = "❌ Failed to summarize timeline";
   }
 
-  btn.disabled = false;
-  btn.innerText = "Summarize Full Timeline";
+  cleanup();
 }
 
+/* =========================
+   INGEST EVENT
+========================= */
+
 async function ingestEvent() {
-  if (ingestInProgress) return; // 🚫 spam block
+  if (ingestInProgress) return;
   ingestInProgress = true;
 
   const button = event.target;
@@ -55,29 +136,22 @@ async function ingestEvent() {
   button.innerText = "⏳ Adding...";
 
   const patientId = document.getElementById("ingestPatientId").value.trim();
+  const patientName = document.getElementById("patientName").value.trim();
+  const doctorName = document.getElementById("doctorName").value.trim();
   const eventType = document.getElementById("eventType").value.trim();
   const content = document.getElementById("content").value.trim();
   const timestampInput = document.getElementById("eventTime").value;
-  const safePatientName =
-  patientName && patientName.length > 0
-    ? patientName
-    : "Unknown";
 
-const safeDoctorName =
-  doctorName && doctorName.length > 0
-    ? doctorName
-    : "Self";
+  const safePatientName = patientName || "Unknown";
+  const safeDoctorName = doctorName || "Self";
 
   if (!patientId || !eventType || !content) {
     alert("Please fill all required fields");
-    resetButton(button);
+    resetIngestButton(button);
     return;
   }
 
   const timestamp = localToUTC(timestampInput);
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s
 
   try {
     const response = await fetch("/ingest", {
@@ -88,109 +162,79 @@ const safeDoctorName =
         patient_name: safePatientName,
         doctor_name: safeDoctorName,
         event_type: eventType,
-        content: content,
-        timestamp: timestamp
+        content,
+        timestamp
       })
-        ,
-      signal: controller.signal
     });
 
-    clearTimeout(timeoutId);
+    if (!response.ok) throw new Error();
+    alert("✅ Event added");
 
-    if (!response.ok) {
-      throw new Error("Server error");
-    }
-
-    const data = await response.json();
-    alert("✅ Event added!");
-
-  } catch (err) {
-    if (err.name === "AbortError") {
-      alert("⚠️ Add event timed out. Try again.");
-    } else {
-      alert("❌ Failed to add event");
-    }
+  } catch {
+    alert("❌ Failed to add event");
   }
 
-  resetButton(button);
+  resetIngestButton(button);
 }
 
-function resetButton(button) {
+function resetIngestButton(button) {
   ingestInProgress = false;
   button.disabled = false;
   button.innerText = "Add Event";
 }
 
+/* =========================
+   ANALYSIS / EXPLAIN
+========================= */
 
 async function runAnalysis() {
-  if (analysisInProgress) return; // 🚫 spam block
+  if (analysisInProgress || summaryInProgress) return;
   analysisInProgress = true;
 
   const button = event.target;
+  const summaryBtn = document.querySelector(
+    'button[onclick^="runTimelineSummary"]'
+  );
+
   button.disabled = true;
   button.innerText = "⏳ Analyzing...";
+  if (summaryBtn) summaryBtn.disabled = true;
 
   const patientId = document.getElementById("patientId").value.trim();
   const query = document.getElementById("query").value.trim();
   const output = document.getElementById("output");
 
-  if (!patientId || !query) {
-    output.innerText = "❌ Please enter Patient ID and query";
-    resetAnalysisButton(button);
-    return;
-  }
-
-  output.innerText = "⏳ Running analysis...";
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s
-
   try {
+    if (!patientId || !query) {
+      output.innerText = "❌ Please enter Patient ID and query";
+      resetAnalysisButton(button);
+      return;
+    }
+
     const response = await fetch("/explain", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        patient_id: patientId,
-        query: query
-      }),
-      signal: controller.signal
+      body: JSON.stringify({ patient_id: patientId, query })
     });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      throw new Error("Server error");
-    }
 
     const data = await response.json();
 
     if (data.error) {
       output.innerText = "❌ " + data.error;
-      resetAnalysisButton(button);
-      return;
-    }
-
-    // Optional: local time display
-    const fromLocal = utcToLocal(data.difference.time_range.from);
-    const toLocal = utcToLocal(data.difference.time_range.to);
-
-    output.innerText = `
+    } else {
+      output.innerText = `
 Change Level: ${data.difference.change_level}
 Semantic Shift: ${data.difference.semantic_shift}
 
-From: ${fromLocal}
-To: ${toLocal}
+From (Local): ${utcToLocal(data.difference.time_range.from)}
+To (Local): ${utcToLocal(data.difference.time_range.to)}
 
 Explanation:
-${data.explanation}
+${data.explanation || "The records show limited explicit textual differences over time."}
 `;
-
-  } catch (err) {
-    if (err.name === "AbortError") {
-      output.innerText = "⚠️ Analysis timed out. Please try again.";
-    } else {
-      output.innerText = "❌ Failed to run analysis.";
     }
+  } catch {
+    output.innerText = "❌ Failed to run analysis";
   }
 
   resetAnalysisButton(button);
@@ -200,6 +244,9 @@ function resetAnalysisButton(button) {
   analysisInProgress = false;
   button.disabled = false;
   button.innerText = "Analyze";
+
+  const summaryBtn = document.querySelector(
+    'button[onclick^="runTimelineSummary"]'
+  );
+  if (summaryBtn) summaryBtn.disabled = false;
 }
-
-

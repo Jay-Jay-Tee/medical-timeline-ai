@@ -1,25 +1,28 @@
 # Core Flask Framework
-flask==3.0.0
-flask-cors==4.0.0
-werkzeug==3.0.1
+flask
+flask-cors
+werkzeug
 
 # Vector Database Client
-qdrant-client==1.7.0
+qdrant-client
 
 # Embeddings Model
-fastembed==0.2.0
+fastembed
 
 # AI/LLM - Google Gemini
-google-genai==0.3.0
+google-genai
 
 # Data Processing
-numpy==1.26.0
+numpy
 
 # Environment Variables
-python-dotenv==1.0.0
+python-dotenv
 
-# Date/Time Utilities (if needed)
-python-dateutil==2.8.2
+# Date/Time Utilities
+python-dateutil
 
-# HTTP Requests (for future API integrations)
-requests==2.31.0
+# HTTP Requests
+requests
+
+# WSGI Server for Production
+gunicorn

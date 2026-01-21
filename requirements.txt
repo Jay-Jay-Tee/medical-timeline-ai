@@ -2,10 +2,11 @@ flask
 qdrant-client
 qdrant-client[fastembed]
 numpy
-google-generativeai
+google-genai
 os
 dataclasses
 google
 uuid
 datetime
 python-dotenv
+gunicorn

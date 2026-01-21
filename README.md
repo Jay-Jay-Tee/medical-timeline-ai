@@ -14,7 +14,7 @@
 7. **🧠 AI-Powered Analysis** - Timeline analysis with Groq Llama 3.3 70B
 8. **📊 Data Quality Metrics** - Intelligent assessment of medical record completeness
 9. **🏥 Multi-Hospital Support** - Perfect for coordinating care across facilities
-10. **🎨 Modern UI/UX** - Not "AI-generated looking" - professional and polished
+10. **🎨 Modern UI/UX** - Professional and polished
 
 ---
 

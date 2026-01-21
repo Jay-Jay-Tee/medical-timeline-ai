@@ -597,27 +597,25 @@ def timeline_summary():
         if not points:
             return jsonify({"error": "No events found"}), 404
         
+        timeline = build_patient_timeline(points)
+        
         if len(points) == 1:
-            timeline = build_patient_timeline(points)
             return jsonify({
                 "timeline": timeline,
-                "semantic_shift": 0.0,
+                "event_clusters": [],
                 "overall_summary": "Only one event recorded. More data needed for timeline analysis.",
                 "data_quality": compute_data_quality(timeline)
             })
         
-        timeline = build_patient_timeline(points)
-        earliest = fetch_point_with_vector(points[0].id)
-        latest = fetch_point_with_vector(points[-1].id)
-        
-        shift = cosine_distance(earliest.vector, latest.vector)
+        # Compute event clusters instead of overall semantic shift
+        clusters = compute_event_clusters(points)
         summary = ai_explain(build_overview_prompt(timeline))
         
         logger.info(f"📊 Timeline generated for {patient_id}: {len(points)} events")
         
         return jsonify({
             "timeline": timeline,
-            "semantic_shift": round(float(shift), 3),
+            "event_clusters": clusters,
             "overall_summary": summary,
             "data_quality": compute_data_quality(timeline)
         })
@@ -631,6 +629,8 @@ def timeline_summary():
 def export_pdf():
     try:
         patient_id = request.json.get("patient_id")
+        timezone_offset = request.json.get("timezone_offset", 0)  # Minutes from UTC
+        
         if not patient_id:
             return jsonify({"error": "patient_id required"}), 400
         
@@ -658,12 +658,20 @@ def export_pdf():
         story.append(Paragraph("Medical Timeline Report", title_style))
         story.append(Paragraph(f"Hospital: {hospital_name}", styles['Normal']))
         story.append(Paragraph(f"Patient ID: {patient_id}", styles['Normal']))
-        story.append(Paragraph(f"Generated: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}", styles['Normal']))
+        
+        # Convert current time to local time for "Generated" timestamp
+        from datetime import timedelta
+        local_now = datetime.now(timezone.utc) + timedelta(minutes=timezone_offset)
+        story.append(Paragraph(f"Generated: {local_now.strftime('%B %d, %Y at %I:%M %p')}", styles['Normal']))
         story.append(Spacer(1, 0.4*inch))
         
         table_data = [['Date', 'Type', 'Details']]
         for e in timeline:
-            date = datetime.fromisoformat(e['timestamp']).strftime('%m/%d/%Y %I:%M %p')
+            # Convert UTC timestamp to local time
+            utc_time = datetime.fromisoformat(e['timestamp'])
+            local_time = utc_time + timedelta(minutes=timezone_offset)
+            date = local_time.strftime('%m/%d/%Y %I:%M %p')
+            
             table_data.append([
                 Paragraph(date, styles['Normal']),
                 Paragraph(e['event_type'], styles['Normal']),
@@ -739,6 +747,57 @@ def cosine_distance(vec_a, vec_b):
     a, b = np.array(vec_a), np.array(vec_b)
     return 1 - np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
+def compute_event_clusters(points):
+    """
+    Compute semantic similarity between consecutive events.
+    Returns clusters of related events based on semantic similarity.
+    """
+    if len(points) < 2:
+        return []
+    
+    clusters = []
+    
+    # Get vectors for all points
+    points_with_vectors = []
+    for p in points:
+        try:
+            pv = fetch_point_with_vector(p.id)
+            points_with_vectors.append({
+                "point": p,
+                "vector": pv.vector,
+                "timestamp": datetime.fromisoformat(p.payload["timestamp"])
+            })
+        except:
+            continue
+    
+    # Compute consecutive similarities
+    for i in range(len(points_with_vectors) - 1):
+        curr = points_with_vectors[i]
+        next_p = points_with_vectors[i + 1]
+        
+        similarity = 1 - cosine_distance(curr["vector"], next_p["vector"])
+        time_gap_days = (next_p["timestamp"] - curr["timestamp"]).days
+        
+        # Classify relationship
+        if similarity > 0.7 and time_gap_days < 30:
+            relation = "Likely related condition"
+        elif similarity > 0.5 and time_gap_days < 90:
+            relation = "Possibly related"
+        elif time_gap_days < 7:
+            relation = "Close temporal proximity"
+        else:
+            relation = "Distinct event"
+        
+        clusters.append({
+            "event1": curr["point"].payload["event_type"],
+            "event2": next_p["point"].payload["event_type"],
+            "similarity": round(float(similarity), 3),
+            "time_gap_days": time_gap_days,
+            "relationship": relation
+        })
+    
+    return clusters
+
 def build_patient_timeline(points):
     return [{
         "timestamp": p.payload["timestamp"],
@@ -755,90 +814,3 @@ def compute_data_quality(timeline):
     count = len(timeline)
     if count == 0:
         return {"label": "No Data", "description": "No medical records available"}
-    
-    times = [datetime.fromisoformat(e["timestamp"]) for e in timeline]
-    span = (max(times) - min(times)).days + 1
-    avg_len = sum(len(e["content"]) for e in timeline) / count
-    
-    if count >= 6 and span >= 7 and avg_len >= 40:
-        return {"label": "Rich", "description": "Sufficient records for comprehensive analysis"}
-    if count >= 3 and span >= 2:
-        return {"label": "Moderate", "description": "Some continuity present, insights may be limited"}
-    return {"label": "Sparse", "description": "Limited data, interpretation constrained"}
-
-def build_overview_prompt(timeline):
-    entries = "\n".join([
-        f"- {e['timestamp']}: {e['event_type']} → {e['content']}" 
-        for e in timeline
-    ])
-    return f"""You are a medical timeline summarization assistant.
-
-Analyze this patient's medical timeline and provide a concise overview.
-
-STRICT RULES:
-- Do NOT diagnose any conditions
-- Do NOT suggest treatments
-- Do NOT infer causes
-- Only describe observable patterns
-
-Focus on:
-- Frequency and timing of medical events
-- Any progression or changes over time
-- Continuity of care
-- Temporal gaps or clusters
-
-Timeline:
-{entries}
-
-Provide a neutral, factual summary of the medical history."""
-
-def ai_explain(prompt):
-    """AI explanation using Groq"""
-    try:
-        if not groq_client:
-            logger.warning("Groq client not initialized")
-            return "AI analysis unavailable. Groq API not configured."
-        
-        response = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=2048,
-            temperature=0.7
-        )
-        
-        if response.choices and response.choices[0].message.content:
-            return response.choices[0].message.content
-        else:
-            return "AI returned empty response. Timeline data is still accessible."
-            
-    except Exception as e:
-        error_msg = str(e).lower()
-        
-        if "rate limit" in error_msg or "quota" in error_msg:
-            logger.error(f"Groq rate limit: {e}")
-            return "⚠️ AI rate limit reached. Timeline data is available below."
-        elif "auth" in error_msg or "invalid" in error_msg:
-            logger.error(f"Groq auth failed: {e}")
-            return "⚠️ AI authentication failed. Check GROQ_API_KEY."
-        else:
-            logger.error(f"Groq error: {e}")
-            return "⚠️ AI analysis temporarily unavailable. Timeline data is still visible below."
-
-# ==================== ERROR HANDLERS ====================
-
-@app.errorhandler(404)
-def not_found(error):
-    return jsonify({"error": "Endpoint not found"}), 404
-
-@app.errorhandler(500)
-def internal_error(error):
-    logger.error(f"Internal server error: {error}")
-    return jsonify({"error": "Internal server error"}), 500
-
-# ==================== MAIN ====================
-
-if __name__ == "__main__":
-    logger.info("🚀 Starting development server...")
-    logger.info("📍 Access at: http://localhost:5000")
-    logger.info("💡 Press Ctrl+C to stop")
-    app.run(debug=True, host='0.0.0.0', port=5000)

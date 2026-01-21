@@ -1,11 +1,25 @@
-flask
-qdrant-client
-qdrant-client[fastembed]
-numpy
-google-generativeai
-os
-dataclasses
-google
-uuid
-datetime
-python-dotenv
+# Core Flask Framework
+flask==3.0.0
+flask-cors==4.0.0
+werkzeug==3.0.1
+
+# Vector Database Client
+qdrant-client==1.7.0
+
+# Embeddings Model
+fastembed==0.2.0
+
+# AI/LLM - Google Gemini
+google-genai==0.3.0
+
+# Data Processing
+numpy==1.26.0
+
+# Environment Variables
+python-dotenv==1.0.0
+
+# Date/Time Utilities (if needed)
+python-dateutil==2.8.2
+
+# HTTP Requests (for future API integrations)
+requests==2.31.0

@@ -882,8 +882,7 @@ def human_time(iso_ts):
 def build_overview_prompt(timeline):
     entries = "\n".join([
         (
-            f"- Event occurred on {e['occurred_at'] or 'an unspecified date'}, "
-            f"and was logged between {human_time(e['logged_at'])}."
+            f"- Event was logged on {human_time(e.get('timestamp'))}."
             f"\n  Type: {e['event_type']}"
             f"\n  Details: {e['content']}"
         )

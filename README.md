@@ -1,4 +1,4 @@
-# Medical Timeline AI  
+# Meditrack AI
 Semantic memory for medicine. Built to be useful, not pretty.
 
 ## Overview

@@ -1,4 +1,4 @@
-# MediTrack - AI-Powered Medical Timeline System
+# MediTrack-AI - AI Powered Medical Timeline System
 ### Deployed at: https://medical-timeline-ai.onrender.com/
 ---
 ## Revolutionary Healthcare Record Management

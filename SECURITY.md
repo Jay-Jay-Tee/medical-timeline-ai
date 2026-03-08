@@ -1,6 +1,6 @@
 # Security Policy
 
-MediTrack-AI handles patient health data. Security vulnerabilities in this project can affect real people in meaningful ways. We take reports seriously and will respond promptly.
+MediTrack handles patient health data. Security vulnerabilities in this project can affect real people in meaningful ways. We take reports seriously and will respond promptly.
 
 ---
 
@@ -32,7 +32,7 @@ A good vulnerability report helps us reproduce and fix the issue faster. Include
 - Step-by-step reproduction instructions
 - The environment where you found it (OS, Python version, browser if frontend)
 - Any relevant logs, screenshots, or proof-of-concept code
-- Whether you believe this is exploitable in the live demo at `medical-timeline-ai.onrender.com`
+- Whether you believe this is exploitable in the live demo at `meditrack.onrender.com`
 
 ### What Happens Next
 
@@ -123,7 +123,7 @@ Going forward, use `.env.example` with placeholder values for documentation, and
 - Server-side request forgery (SSRF)
 - Insecure file upload handling
 - Credential or secret exposure
-- Any vulnerability in the live demo at `medical-timeline-ai.onrender.com`
+- Any vulnerability in the live demo at `meditrack.onrender.com`
 
 ### Out of Scope
 
